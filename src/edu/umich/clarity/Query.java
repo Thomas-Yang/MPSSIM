@@ -1,12 +1,14 @@
 package edu.umich.clarity;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Query {
+	public static final int TARGET_QUERY = 0;
 	private String query_name;
 	private int query_type;
-	private int start_time;
-	private int end_time;
+	private float start_time;
+	private float end_time;
 	private BlockingQueue<Kernel> kernelQueue;
 	private BlockingQueue<Kernel> finishedKernelQueue;
 	private boolean finished;
@@ -15,6 +17,8 @@ public class Query {
 	public Query() {
 		this.finished = false;
 		this.seqconstraint = false;
+		this.kernelQueue = new LinkedBlockingQueue<Kernel>();
+		this.finishedKernelQueue = new LinkedBlockingQueue<Kernel>();
 	}
 
 	public String getQuery_name() {
@@ -33,19 +37,19 @@ public class Query {
 		this.query_type = query_type;
 	}
 
-	public int getStart_time() {
+	public float getStart_time() {
 		return start_time;
 	}
 
-	public void setStart_time(int start_time) {
+	public void setStart_time(float start_time) {
 		this.start_time = start_time;
 	}
 
-	public int getEnd_time() {
+	public float getEnd_time() {
 		return end_time;
 	}
 
-	public void setEnd_time(int end_time) {
+	public void setEnd_time(float end_time) {
 		this.end_time = end_time;
 	}
 
@@ -79,6 +83,10 @@ public class Query {
 
 	public void setSeqconstraint(boolean seqconstraint) {
 		this.seqconstraint = seqconstraint;
+	}
+
+	public static int getTargetQuery() {
+		return TARGET_QUERY;
 	}
 
 }
