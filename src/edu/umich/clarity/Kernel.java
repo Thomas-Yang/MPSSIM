@@ -8,6 +8,7 @@ public class Kernel {
 	private float duration;
 	private int occupancy;
 	private boolean finished;
+	private int execution_order;
 
 	public Kernel() {
 		this.finished = false;
@@ -67,5 +68,13 @@ public class Kernel {
 
 	public void setFinished(boolean finished) {
 		this.finished = finished;
+	}
+
+	public int getExecution_order() {
+		return execution_order;
+	}
+
+	public void setExecution_order(int execution_order) {
+		this.execution_order = execution_order;
 	}
 }
