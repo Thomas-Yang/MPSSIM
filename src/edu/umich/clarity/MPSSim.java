@@ -13,6 +13,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class MPSSim {
 	public static final int COMPUTE_SLOTS = 15;
+	public static final int GEN_CDF = 1;
 	// there is a time slack before next kernel can be issued
 	// TODO not used for now
 	public static final float KERNEL_SLACK = 0.0f;
@@ -133,6 +134,20 @@ public class MPSSim {
 				Random random = new Random();
 				int chosen_index = random.nextInt(select_range.size());
 				int chosen_query = select_range.get(chosen_index);
+				/*
+				 * 4.1 priority first, always choose the kernel from the target
+				 * query
+				 */
+				// int chosen_query;
+				// int chosen_index;
+				// if (select_range.get(0) == 0) {
+				// chosen_index = 0;
+				// chosen_query = 0;
+				// } else {
+				// Random random = new Random();
+				// chosen_index = random.nextInt(select_range.size());
+				// chosen_query = select_range.get(chosen_index);
+				// }
 				/*
 				 * 5. test whether the candidate meet the requirements
 				 */
