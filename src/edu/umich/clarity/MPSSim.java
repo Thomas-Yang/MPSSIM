@@ -17,6 +17,7 @@ public class MPSSim {
 
 	private ArrayList<Query> finishedQueries;
 	private ArrayList<Query> issuingQueries;
+	private ArrayList<Integer> issueIndicator;
 	private Queue<Kernel> kernelQueue;
 	private boolean pcie_transfer = false;
 
@@ -27,6 +28,7 @@ public class MPSSim {
 	 */
 	public MPSSim() {
 		this.finishedQueries = new ArrayList<Query>();
+		this.issueIndicator = new ArrayList<Integer>();
 		this.kernelQueue = new PriorityQueue<Kernel>(100,
 				new KernelComparator<Kernel>());
 		this.issuingQueries = new ArrayList<Query>();
@@ -39,6 +41,9 @@ public class MPSSim {
 		issuingQueries.add(targetQueries.poll());
 		for (BlockingQueue<Query> backgroundQueries : backgroundQueryTypes) {
 			issuingQueries.add(backgroundQueries.poll());
+		}
+		for (int i = 0; i < (issuingQueries.size()); i++) {
+			issueIndicator.add(1);
 		}
 		enqueueKernel(0.0f);
 	}
@@ -60,7 +65,12 @@ public class MPSSim {
 		 * 1. if the issue list is empty, then all the queries at least have
 		 * been issued for processing
 		 */
-		if (issuingQueries.size() != 0) {
+		int issueSize = 0;
+		for (int indicator : issueIndicator) {
+			issueSize += indicator;
+		}
+		// if (issuingQueries.size() != 0) {
+		if (issueSize != 0) {
 			// System.out.println("start to simulate...");
 			/*
 			 * 2. make sure the query selection range within the current issue
@@ -69,6 +79,11 @@ public class MPSSim {
 			ArrayList<Integer> select_range = new ArrayList<Integer>();
 			for (int i = 0; i < issuingQueries.size(); i++) {
 				select_range.add(i);
+			}
+			for (int i = 0; i < issueIndicator.size(); i++) {
+				if (issueIndicator.get(i) == 0) {
+					select_range.remove(select_range.indexOf(i));
+				}
 			}
 			/*
 			 * 3. pick the kernels satisfying the sequential constraints as well
@@ -107,11 +122,13 @@ public class MPSSim {
 						kernel.setStart_time(elapse_time);
 						kernel.setEnd_time(kernel.getDuration() + elapse_time);
 						kernelQueue.offer(kernel);
-						System.out.println("select query "
-								+ kernel.getQuery_type() + " kernel order "
-								+ kernel.getExecution_order()
-								+ " kernel occupacy " + kernel.getOccupancy()
-								+ " kernel endtime " + kernel.getEnd_time());
+						System.out.println("MPS enqueues kernel "
+								+ kernel.getExecution_order() + " from query "
+								+ kernel.getQuery_type()
+								+ " with kernel occupacy "
+								+ kernel.getOccupancy()
+								+ " and estimated finish time "
+								+ kernel.getEnd_time());
 						/*
 						 * 8. assign the compute slot for the kernel
 						 */
@@ -127,6 +144,11 @@ public class MPSSim {
 				 */
 				select_range.remove(chosen_index);
 			}
+		} else {
+			System.out
+					.println("At time "
+							+ elapse_time
+							+ "(ms): all queries have been submitted, wait for the kernel queue to become empty");
 		}
 	}
 
@@ -135,6 +157,7 @@ public class MPSSim {
 		 * initial the simulator to time zero
 		 */
 		init();
+		Kernel kernel = null;
 		/*
 		 * process the queue while it is not empty
 		 */
@@ -142,7 +165,7 @@ public class MPSSim {
 			/*
 			 * 1. fetch the queue from queue and execute it (hypothetically)
 			 */
-			Kernel kernel = kernelQueue.poll();
+			kernel = kernelQueue.poll();
 			/*
 			 * 2. mark the kernel as finished and relinquish the pcie bus
 			 */
@@ -183,9 +206,12 @@ public class MPSSim {
 					finishedQueries.add(query);
 				}
 				/*
-				 * 9. remove the finished query from the issue list
+				 * 9. instead of removing the finished query from the issue list
+				 * mark the indicator of the corresponding issuing slot as
+				 * invalid
 				 */
-				issuingQueries.remove(kernel.getQuery_type());
+				// issuingQueries.remove(kernel.getQuery_type());
+				issueIndicator.set(kernel.getQuery_type(), 0);
 				/*
 				 * 10. add the same type of query to the issue list unless the
 				 * query queue is empty for that type of query
@@ -195,6 +221,7 @@ public class MPSSim {
 						Query comingQuery = targetQueries.poll();
 						comingQuery.setStart_time(kernel.getEnd_time());
 						issuingQueries.set(kernel.getQuery_type(), comingQuery);
+						issueIndicator.set(kernel.getQuery_type(), 1);
 					}
 				} else {
 					if (!backgroundQueryTypes.get(kernel.getQuery_type() - 1)
@@ -203,15 +230,24 @@ public class MPSSim {
 								kernel.getQuery_type() - 1).poll();
 						comingQuery.setStart_time(kernel.getEnd_time());
 						issuingQueries.set(kernel.getQuery_type(), comingQuery);
+						issueIndicator.set(kernel.getQuery_type(), 1);
 					}
 				}
 			}
 			/*
 			 * 11. select the kernel to be issued to the queue
 			 */
-			System.out.println("next issuing cycle....");
+			System.out.println("At time " + kernel.getEnd_time() + "(ms)"
+					+ " finished executing kernel "
+					+ kernel.getExecution_order() + " from query "
+					+ kernel.getQuery_type());
+			System.out.println("Enqueue new kernels from the issuing list...");
 			enqueueKernel(kernel.getEnd_time());
 		}
+		System.out
+				.println("At time "
+						+ kernel.getEnd_time()
+						+ "(ms): All kernel have been executed, the simulation will stop");
 	}
 
 	public static void main(String[] args) {
@@ -289,8 +325,9 @@ public class MPSSim {
 		 * print the results from the finished query queue
 		 */
 		for (Query finishedQuery : mps_sim.getFinishedQueries()) {
-			System.out.println(finishedQuery.getEnd_time()
-					- finishedQuery.getStart_time());
+			System.out.println("The latency for the target query: "
+					+ (finishedQuery.getEnd_time() - finishedQuery
+							.getStart_time()) + "(ms)");
 		}
 	}
 
