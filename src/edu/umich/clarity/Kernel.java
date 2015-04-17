@@ -11,6 +11,7 @@ public class Kernel {
 	private int execution_order;
 
 	public Kernel() {
+		this.start_time = 0.0f;
 		this.finished = false;
 	}
 

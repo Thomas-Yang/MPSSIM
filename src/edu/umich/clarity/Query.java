@@ -15,6 +15,7 @@ public class Query {
 	private boolean seqconstraint;
 
 	public Query() {
+		this.start_time = 0.0f;
 		this.finished = false;
 		this.seqconstraint = false;
 		this.kernelQueue = new LinkedBlockingQueue<Kernel>();

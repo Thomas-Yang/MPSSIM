@@ -3,6 +3,8 @@ package edu.umich.clarity;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Random;
@@ -11,6 +13,12 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class MPSSim {
 	public static final int COMPUTE_SLOTS = 15;
+	// there is a time slack before next kernel can be issued
+	// TODO not used for now
+	public static final float KERNEL_SLACK = 0.0f;
+	public static final int TARGET_QUERY_NUM = 1000;
+	public static final int BG_QUERY_CLIENTS = 4;
+	public static final int BG_QUERY_NUM = 4000;
 	public static final String PROFILE_PATH = "/home/hailong/git/MPSSIM/bin/edu/umich/clarity/formated/";
 	private BlockingQueue<Query> targetQueries;
 	private ArrayList<BlockingQueue<Query>> backgroundQueryTypes;
@@ -20,8 +28,34 @@ public class MPSSim {
 	private ArrayList<Integer> issueIndicator;
 	private Queue<Kernel> kernelQueue;
 	private boolean pcie_transfer = false;
+	private static Map<Float, Float> utilization;
 
 	private int available_slots = MPSSim.COMPUTE_SLOTS;
+
+	public BlockingQueue<Query> getTargetQueries() {
+		return targetQueries;
+	}
+
+	public void setTargetQueries(BlockingQueue<Query> targetQueries) {
+		this.targetQueries = targetQueries;
+	}
+
+	public ArrayList<BlockingQueue<Query>> getBackgroundQueryTypes() {
+		return backgroundQueryTypes;
+	}
+
+	public void setBackgroundQueryTypes(
+			ArrayList<BlockingQueue<Query>> backgroundQueryTypes) {
+		this.backgroundQueryTypes = backgroundQueryTypes;
+	}
+
+	public ArrayList<Query> getFinishedQueries() {
+		return finishedQueries;
+	}
+
+	public void setFinishedQueries(ArrayList<Query> finishedQueries) {
+		this.finishedQueries = finishedQueries;
+	}
 
 	/**
 	 * add each type of query into the issuing list at the initial stage.
@@ -34,6 +68,7 @@ public class MPSSim {
 		this.issuingQueries = new ArrayList<Query>();
 		this.targetQueries = new LinkedBlockingQueue<Query>();
 		this.backgroundQueryTypes = new ArrayList<BlockingQueue<Query>>();
+		utilization = new HashMap<Float, Float>();
 	}
 
 	private void init() {
@@ -120,7 +155,8 @@ public class MPSSim {
 						 */
 						issuingQueries.get(chosen_query).setSeqconstraint(true);
 						kernel.setStart_time(elapse_time);
-						kernel.setEnd_time(kernel.getDuration() + elapse_time);
+						kernel.setEnd_time(kernel.getDuration() + elapse_time
+								+ MPSSim.KERNEL_SLACK);
 						kernelQueue.offer(kernel);
 						System.out.println("MPS enqueues kernel "
 								+ kernel.getExecution_order() + " from query "
@@ -152,6 +188,9 @@ public class MPSSim {
 		}
 	}
 
+	/**
+	 * 
+	 */
 	public void mps_simulate() {
 		/*
 		 * initial the simulator to time zero
@@ -180,6 +219,9 @@ public class MPSSim {
 			/*
 			 * 4. relinquish the computing slots back to the pool
 			 */
+			utilization.put(kernel.getEnd_time(),
+					(MPSSim.COMPUTE_SLOTS - available_slots)
+							/ (MPSSim.COMPUTE_SLOTS * 1.0f));
 			available_slots += kernel.getOccupancy();
 			/*
 			 * 5. add the finished kernel back to the query's finished kernel
@@ -250,23 +292,24 @@ public class MPSSim {
 						+ "(ms): All kernel have been executed, the simulation will stop");
 	}
 
-	public static void main(String[] args) {
-		MPSSim mps_sim = new MPSSim();
-		/*
-		 * manipulate the input
-		 */
-		/*
-		 * generate the target query
-		 */
-		Query targetQuery = new Query();
-		targetQuery.setQuery_type(Query.TARGET_QUERY);
-		targetQuery.setQuery_name("asr");
+	/**
+	 * Parse the kernel profile
+	 * 
+	 * @param filename
+	 *            file contains kernel profile
+	 * @param queryType
+	 *            the type of query to which the kernels belong
+	 * @return a list of kernel instances
+	 */
+	private static ArrayList<Kernel> readKernelFile(String filename,
+			int queryType) {
+		ArrayList<Kernel> kernelList = new ArrayList<Kernel>();
 		BufferedReader fileReader = null;
 		String line;
 		try {
 
 			fileReader = new BufferedReader(new FileReader(MPSSim.PROFILE_PATH
-					+ "asr.csv"));
+					+ filename));
 			// skip the column name of the first line
 			line = fileReader.readLine();
 			int i = 0;
@@ -275,47 +318,52 @@ public class MPSSim {
 				Kernel kernel = new Kernel();
 				kernel.setDuration(new Float(profile[1]).floatValue());
 				kernel.setOccupancy(new Integer(profile[4]).intValue());
-				kernel.setQuery_type(targetQuery.getQuery_type());
+				kernel.setQuery_type(queryType);
 				kernel.setExecution_order(i);
-				targetQuery.getKernelQueue().offer(kernel);
-				// System.out.println(profile[4]);
+				kernelList.add(kernel);
 				i++;
 			}
+			fileReader.close();
 		} catch (Exception ex) {
 			System.out.println("Failed to read the file" + ex.getMessage());
 		}
-		mps_sim.getTargetQueries().offer(targetQuery);
+		return kernelList;
+	}
+
+	public static void main(String[] args) {
+		MPSSim mps_sim = new MPSSim();
+		/*
+		 * manipulate the input
+		 */
+		/*
+		 * generate the target query
+		 */
+		for (int i = 0; i < MPSSim.TARGET_QUERY_NUM; i++) {
+			Query targetQuery = new Query();
+			targetQuery.setQuery_type(Query.TARGET_QUERY);
+			targetQuery.setQuery_name("asr");
+			for (Kernel kernel : readKernelFile("asr.csv",
+					targetQuery.getQuery_type())) {
+				targetQuery.getKernelQueue().offer(kernel);
+			}
+			mps_sim.getTargetQueries().offer(targetQuery);
+		}
 		/*
 		 * generate the background query
 		 */
-		int bg_query_num = 4;
-		for (int i = 0; i < bg_query_num; i++) {
-			Query backgroundQuery = new Query();
-			backgroundQuery.setQuery_name("stemmer");
-			backgroundQuery.setQuery_type(i + 1);
-			try {
-				fileReader = new BufferedReader(new FileReader(
-						MPSSim.PROFILE_PATH + "stemmer.csv"));
-				// skip the column name of the first line
-				line = fileReader.readLine();
-				int k = 0;
-				while ((line = fileReader.readLine()) != null) {
-					String[] profile = line.split(",");
-					Kernel kernel = new Kernel();
-					kernel.setDuration(new Float(profile[1]).floatValue());
-					kernel.setOccupancy(new Integer(profile[4]).intValue());
-					kernel.setQuery_type(backgroundQuery.getQuery_type());
-					kernel.setExecution_order(k);
-					backgroundQuery.getKernelQueue().offer(kernel);
-					k++;
-					// System.out.println(profile[1]);
-				}
-			} catch (Exception ex) {
-				System.out.println("Failed to read the file" + ex.getMessage());
-			}
+		for (int i = 0; i < MPSSim.BG_QUERY_CLIENTS; i++) {
 			mps_sim.getBackgroundQueryTypes().add(
 					new LinkedBlockingQueue<Query>());
-			mps_sim.getBackgroundQueryTypes().get(i).offer(backgroundQuery);
+			for (int j = 0; j < MPSSim.BG_QUERY_NUM; j++) {
+				Query backgroundQuery = new Query();
+				backgroundQuery.setQuery_name("stemmer");
+				backgroundQuery.setQuery_type(i + 1);
+				for (Kernel kernel : readKernelFile("stemmer.csv",
+						backgroundQuery.getQuery_type())) {
+					backgroundQuery.getKernelQueue().offer(kernel);
+				}
+				mps_sim.getBackgroundQueryTypes().get(i).offer(backgroundQuery);
+			}
 		}
 		/*
 		 * start to simulate
@@ -324,36 +372,27 @@ public class MPSSim {
 		/*
 		 * print the results from the finished query queue
 		 */
+		float accumulative_latency = 0.0f;
+		float target_endtime = 0.0f;
 		for (Query finishedQuery : mps_sim.getFinishedQueries()) {
-			System.out.println("The latency for the target query: "
-					+ (finishedQuery.getEnd_time() - finishedQuery
-							.getStart_time()) + "(ms)");
+			accumulative_latency += finishedQuery.getEnd_time()
+					- finishedQuery.getStart_time();
+			if (finishedQuery.getEnd_time() > target_endtime) {
+				target_endtime = finishedQuery.getEnd_time();
+			}
 		}
+		System.out.println("The average latency for the target query: "
+				+ String.format("%.2f", accumulative_latency
+						/ mps_sim.getFinishedQueries().size()) + "(ms)");
+		float accumulative_utilization = 0.0f;
+		int total = 0;
+		for (Float key : utilization.keySet()) {
+			if (key < target_endtime) {
+				accumulative_utilization += utilization.get(key);
+				total++;
+			}
+		}
+		System.out.println("The average utilization: "
+				+ String.format("%.2f", accumulative_utilization / total));
 	}
-
-	public BlockingQueue<Query> getTargetQueries() {
-		return targetQueries;
-	}
-
-	public void setTargetQueries(BlockingQueue<Query> targetQueries) {
-		this.targetQueries = targetQueries;
-	}
-
-	public ArrayList<BlockingQueue<Query>> getBackgroundQueryTypes() {
-		return backgroundQueryTypes;
-	}
-
-	public void setBackgroundQueryTypes(
-			ArrayList<BlockingQueue<Query>> backgroundQueryTypes) {
-		this.backgroundQueryTypes = backgroundQueryTypes;
-	}
-
-	public ArrayList<Query> getFinishedQueries() {
-		return finishedQueries;
-	}
-
-	public void setFinishedQueries(ArrayList<Query> finishedQueries) {
-		this.finishedQueries = finishedQueries;
-	}
-
 }
