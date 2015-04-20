@@ -1,87 +1,138 @@
 package edu.umich.clarity;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.FileReader;
+import java.io.FileWriter;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Random;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 public class MPSSim {
+	// the total compute slots
 	public static final int COMPUTE_SLOTS = 15;
-	public static final int GEN_CDF = 1;
 	// there is a time slack before next kernel can be issued
 	// TODO not used for now
 	public static final float KERNEL_SLACK = 0.0f;
-	public static final int TARGET_QUERY_NUM = 1000;
-	public static final int BG_QUERY_CLIENTS = 4;
-	public static final int BG_QUERY_NUM = 4000;
+	// the location of kernel profiles
 	public static final String PROFILE_PATH = "/home/hailong/git/MPSSIM/bin/edu/umich/clarity/formated/";
-	private BlockingQueue<Query> targetQueries;
-	private ArrayList<BlockingQueue<Query>> backgroundQueryTypes;
+	// the location of simulation configuration
+	public static final String CONFIG_PATH = "/home/hailong/git/MPSSIM/bin/edu/umich/clarity/";
 
-	private ArrayList<Query> finishedQueries;
+	public static ArrayList<LinkedList<Query>> targetQueries;
+	public static ArrayList<LinkedList<Query>> backgroundQueries;
+
+	private static ArrayList<LinkedList<Query>> finishedQueries;
+	private static ArrayList<Map.Entry<Float, Float>> utilization;
+
 	private ArrayList<Query> issuingQueries;
 	private ArrayList<Integer> issueIndicator;
 	private Queue<Kernel> kernelQueue;
+
 	private boolean pcie_transfer = false;
-	private static Map<Float, Float> utilization;
+	/*
+	 * kernel scheduling policy
+	 */
+	public static String schedulingType;
 
+	public static final String FIFO_SCHEDULE = "fifo";
+	public static final String PRIORITY_SCHEDULE = "priority";
+	public static final String FAIRNESS_SCHEDULE = "fairness";
 	private int available_slots = MPSSim.COMPUTE_SLOTS;
-
-	public BlockingQueue<Query> getTargetQueries() {
-		return targetQueries;
-	}
-
-	public void setTargetQueries(BlockingQueue<Query> targetQueries) {
-		this.targetQueries = targetQueries;
-	}
-
-	public ArrayList<BlockingQueue<Query>> getBackgroundQueryTypes() {
-		return backgroundQueryTypes;
-	}
-
-	public void setBackgroundQueryTypes(
-			ArrayList<BlockingQueue<Query>> backgroundQueryTypes) {
-		this.backgroundQueryTypes = backgroundQueryTypes;
-	}
-
-	public ArrayList<Query> getFinishedQueries() {
-		return finishedQueries;
-	}
-
-	public void setFinishedQueries(ArrayList<Query> finishedQueries) {
-		this.finishedQueries = finishedQueries;
-	}
 
 	/**
 	 * add each type of query into the issuing list at the initial stage.
 	 */
 	public MPSSim() {
-		this.finishedQueries = new ArrayList<Query>();
+		finishedQueries = new ArrayList<LinkedList<Query>>();
 		this.issueIndicator = new ArrayList<Integer>();
 		this.kernelQueue = new PriorityQueue<Kernel>(100,
 				new KernelComparator<Kernel>());
 		this.issuingQueries = new ArrayList<Query>();
-		this.targetQueries = new LinkedBlockingQueue<Query>();
-		this.backgroundQueryTypes = new ArrayList<BlockingQueue<Query>>();
-		utilization = new HashMap<Float, Float>();
+		targetQueries = new ArrayList<LinkedList<Query>>();
+		backgroundQueries = new ArrayList<LinkedList<Query>>();
+		utilization = new ArrayList<Map.Entry<Float, Float>>();
 	}
 
 	private void init() {
-		// System.out.println("target queue size " + targetQueries.size());
-		issuingQueries.add(targetQueries.poll());
-		for (BlockingQueue<Query> backgroundQueries : backgroundQueryTypes) {
-			issuingQueries.add(backgroundQueries.poll());
+		for (LinkedList<Query> queries : targetQueries) {
+			issuingQueries.add(queries.poll());
+		}
+		for (LinkedList<Query> queries : backgroundQueries) {
+			issuingQueries.add(queries.poll());
 		}
 		for (int i = 0; i < (issuingQueries.size()); i++) {
 			issueIndicator.add(1);
 		}
 		enqueueKernel(0.0f);
+	}
+
+	private int FIFOSchedule(ArrayList<Integer> select_range) {
+		int chosen_query;
+		/*
+		 * treat all types of queries equally
+		 */
+		Random random = new Random();
+		int chosen_index = random.nextInt(select_range.size());
+		chosen_query = select_range.get(chosen_index);
+		return chosen_query;
+	}
+
+	/**
+	 * Always choose the target query over the background query. When multiple
+	 * target queries available, use FIFO
+	 * 
+	 * @param select_range
+	 * @return
+	 */
+	private int PrioritySchedule(ArrayList<Integer> select_range) {
+		int chosen_query = 0;
+		ArrayList<Integer> first_priority = new ArrayList<Integer>();
+		for (int i = 0; i < targetQueries.size(); i++) {
+			if (select_range.contains(i)) {
+				first_priority.add(i);
+			}
+		}
+		/*
+		 * no priority query exists, use MPS default FIFO
+		 */
+		if (first_priority.size() == 0) {
+			chosen_query = FIFOSchedule(select_range);
+		} else {// multiple priority queries exist, pick one with FIFO
+			chosen_query = FIFOSchedule(first_priority);
+		}
+		return chosen_query;
+	}
+
+	/**
+	 * Whenever there are multiple target queries to choose, make sure each type
+	 * of query use the compute resource equally
+	 * 
+	 * @param select_range
+	 * @return
+	 */
+	private int FairnessSchedule(ArrayList<Integer> select_range) {
+		int chosen_query = 0;
+		ArrayList<Integer> first_priority = new ArrayList<Integer>();
+		for (int i = 0; i < targetQueries.size(); i++) {
+			if (select_range.contains(i)) {
+				first_priority.add(i);
+			}
+		}
+		/*
+		 * no priority query exists, use MPS default FIFO
+		 */
+		if (first_priority.size() == 0) {
+			chosen_query = FIFOSchedule(select_range);
+		} else {// multiple priority queries exist, pick one with the least
+				// fairness
+			
+		}
+		return chosen_query;
 	}
 
 	/**
@@ -105,9 +156,7 @@ public class MPSSim {
 		for (int indicator : issueIndicator) {
 			issueSize += indicator;
 		}
-		// if (issuingQueries.size() != 0) {
 		if (issueSize != 0) {
-			// System.out.println("start to simulate...");
 			/*
 			 * 2. make sure the query selection range within the current issue
 			 * list
@@ -131,9 +180,14 @@ public class MPSSim {
 				/*
 				 * 4. random select one query candidate to mimic FIFO within MPS
 				 */
-				Random random = new Random();
-				int chosen_index = random.nextInt(select_range.size());
-				int chosen_query = select_range.get(chosen_index);
+				int chosen_query = 0;
+				if (MPSSim.schedulingType
+						.equalsIgnoreCase(MPSSim.FIFO_SCHEDULE)) {
+					chosen_query = FIFOSchedule(select_range);
+				} else if (MPSSim.schedulingType
+						.equalsIgnoreCase(MPSSim.PRIORITY_SCHEDULE)) {
+					chosen_query = PrioritySchedule(select_range);
+				}
 				/*
 				 * 4.1 priority first, always choose the kernel from the target
 				 * query
@@ -193,7 +247,7 @@ public class MPSSim {
 				 * 9. this type of query should not be considered during next
 				 * round
 				 */
-				select_range.remove(chosen_index);
+				select_range.remove(select_range.indexOf(chosen_query));
 			}
 		} else {
 			System.out
@@ -234,9 +288,10 @@ public class MPSSim {
 			/*
 			 * 4. relinquish the computing slots back to the pool
 			 */
-			utilization.put(kernel.getEnd_time(),
-					(MPSSim.COMPUTE_SLOTS - available_slots)
-							/ (MPSSim.COMPUTE_SLOTS * 1.0f));
+			float util_percent = (MPSSim.COMPUTE_SLOTS - available_slots)
+					/ (MPSSim.COMPUTE_SLOTS * 1.0f);
+			utilization.add(new SimpleEntry<Float, Float>(kernel.getEnd_time(),
+					util_percent));
 			available_slots += kernel.getOccupancy();
 			/*
 			 * 5. add the finished kernel back to the query's finished kernel
@@ -259,8 +314,8 @@ public class MPSSim {
 				/*
 				 * 8. if the target query, save the finished query to a list
 				 */
-				if (query.getQuery_type() == Query.TARGET_QUERY) {
-					finishedQueries.add(query);
+				if (query.getQuery_type() < targetQueries.size()) {
+					finishedQueries.get(query.getQuery_type()).add(query);
 				}
 				/*
 				 * 9. instead of removing the finished query from the issue list
@@ -273,18 +328,21 @@ public class MPSSim {
 				 * 10. add the same type of query to the issue list unless the
 				 * query queue is empty for that type of query
 				 */
-				if (kernel.getQuery_type() == 0) {
-					if (!targetQueries.isEmpty()) {
-						Query comingQuery = targetQueries.poll();
+				if (kernel.getQuery_type() < targetQueries.size()) {
+					if (!targetQueries.get(kernel.getQuery_type()).isEmpty()) {
+						Query comingQuery = targetQueries.get(
+								kernel.getQuery_type()).poll();
 						comingQuery.setStart_time(kernel.getEnd_time());
 						issuingQueries.set(kernel.getQuery_type(), comingQuery);
 						issueIndicator.set(kernel.getQuery_type(), 1);
 					}
 				} else {
-					if (!backgroundQueryTypes.get(kernel.getQuery_type() - 1)
+					if (!backgroundQueries.get(
+							kernel.getQuery_type() - targetQueries.size())
 							.isEmpty()) {
-						Query comingQuery = backgroundQueryTypes.get(
-								kernel.getQuery_type() - 1).poll();
+						Query comingQuery = backgroundQueries.get(
+								kernel.getQuery_type() - targetQueries.size())
+								.poll();
 						comingQuery.setStart_time(kernel.getEnd_time());
 						issuingQueries.set(kernel.getQuery_type(), comingQuery);
 						issueIndicator.set(kernel.getQuery_type(), 1);
@@ -350,64 +408,181 @@ public class MPSSim {
 		/*
 		 * manipulate the input
 		 */
-		/*
-		 * generate the target query
-		 */
-		for (int i = 0; i < MPSSim.TARGET_QUERY_NUM; i++) {
-			Query targetQuery = new Query();
-			targetQuery.setQuery_type(Query.TARGET_QUERY);
-			targetQuery.setQuery_name("asr");
-			for (Kernel kernel : readKernelFile("asr.csv",
-					targetQuery.getQuery_type())) {
-				targetQuery.getKernelQueue().offer(kernel);
-			}
-			mps_sim.getTargetQueries().offer(targetQuery);
-		}
-		/*
-		 * generate the background query
-		 */
-		for (int i = 0; i < MPSSim.BG_QUERY_CLIENTS; i++) {
-			mps_sim.getBackgroundQueryTypes().add(
-					new LinkedBlockingQueue<Query>());
-			for (int j = 0; j < MPSSim.BG_QUERY_NUM; j++) {
-				Query backgroundQuery = new Query();
-				backgroundQuery.setQuery_name("stemmer");
-				backgroundQuery.setQuery_type(i + 1);
-				for (Kernel kernel : readKernelFile("stemmer.csv",
-						backgroundQuery.getQuery_type())) {
-					backgroundQuery.getKernelQueue().offer(kernel);
-				}
-				mps_sim.getBackgroundQueryTypes().get(i).offer(backgroundQuery);
-			}
-		}
+		preprocess("sim.conf");
 		/*
 		 * start to simulate
 		 */
 		mps_sim.mps_simulate();
+
 		/*
-		 * print the results from the finished query queue
+		 * print out statistics about the MPS simulation
+		 */
+		calculate_latency(mps_sim);
+		calculate_utilization(mps_sim);
+	}
+
+	/**
+	 * TODO calculate the latency distribution for mutiple target queries
+	 * 
+	 * @param mps_sim
+	 */
+	private static void calculate_latency(MPSSim mps_sim) {
+		/*
+		 * print out the statistics from the finished query queue, save the
+		 * target query latency distribution into a file
 		 */
 		float accumulative_latency = 0.0f;
 		float target_endtime = 0.0f;
-		for (Query finishedQuery : mps_sim.getFinishedQueries()) {
-			accumulative_latency += finishedQuery.getEnd_time()
-					- finishedQuery.getStart_time();
-			if (finishedQuery.getEnd_time() > target_endtime) {
-				target_endtime = finishedQuery.getEnd_time();
+		for (int i = 0; i < finishedQueries.size(); i++) {
+			try {
+				BufferedWriter bw = new BufferedWriter(new FileWriter(
+						MPSSim.CONFIG_PATH
+								+ finishedQueries.get(i).peek().getQuery_name()
+								+ "-" + i + "-" + schedulingType + "-"
+								+ "latency.txt"));
+				for (Query finishedQuery : finishedQueries.get(i)) {
+					accumulative_latency += finishedQuery.getEnd_time()
+							- finishedQuery.getStart_time();
+					bw.write(finishedQuery.getEnd_time()
+							- finishedQuery.getStart_time() + "\n");
+					if (finishedQuery.getEnd_time() > target_endtime) {
+						target_endtime = finishedQuery.getEnd_time();
+					}
+				}
+				bw.close();
+			} catch (Exception ex) {
+				System.out
+						.println("Failed to write to the latency.txt, the reason is: "
+								+ ex.getMessage());
+			}
+			/*
+			 * print out the average latency for target queries
+			 */
+			System.out.println("The average latency for the target query: "
+					+ String.format("%.2f", accumulative_latency
+							/ finishedQueries.get(i).size()) + "(ms)");
+		}
+	}
+
+	/**
+	 * TODO calculate the utilization with mutiple target queries
+	 * 
+	 * @param mps_sim
+	 */
+	private static void calculate_utilization(MPSSim mps_sim) {
+		float accumulative_utilization = 0.0f;
+		float end_time = 0.0f;
+		float previous_time = 0.0f;
+		for (LinkedList<Query> queries : finishedQueries) {
+			if (queries.get(queries.size() - 1).getEnd_time() > end_time) {
+				end_time = queries.get(queries.size() - 1).getEnd_time();
 			}
 		}
-		System.out.println("The average latency for the target query: "
-				+ String.format("%.2f", accumulative_latency
-						/ mps_sim.getFinishedQueries().size()) + "(ms)");
-		float accumulative_utilization = 0.0f;
-		int total = 0;
-		for (Float key : utilization.keySet()) {
-			if (key < target_endtime) {
-				accumulative_utilization += utilization.get(key);
-				total++;
+		for (Map.Entry<Float, Float> utils : utilization) {
+			if (utils.getKey() <= end_time) {
+				accumulative_utilization += (utils.getKey() - previous_time)
+						/ end_time * utils.getValue();
+				previous_time = utils.getKey();
 			}
 		}
 		System.out.println("The average utilization: "
-				+ String.format("%.2f", accumulative_utilization / total));
+				+ String.format("%.2f", accumulative_utilization));
+	}
+
+	/**
+	 * Read the simulation configuration and generate queries of different types
+	 * 
+	 * @param simConf
+	 *            the simulation configuration file
+	 */
+	private static void preprocess(String simConf) {
+		ArrayList<SimConfiguration> targetConfs = null;
+		ArrayList<SimConfiguration> backgroundConfs = null;
+		try {
+			BufferedReader reader = new BufferedReader(new FileReader(
+					MPSSim.CONFIG_PATH + simConf));
+			String line;
+			targetConfs = new ArrayList<SimConfiguration>();
+			backgroundConfs = new ArrayList<SimConfiguration>();
+			/*
+			 * read the configuration for target queries, the configuration
+			 * format is (query name, client number, query number)
+			 */
+			if ((line = reader.readLine()) != null) {
+				String[] confs = line.split(" ");
+				for (int i = 0; i < confs.length; i += 3) {
+					SimConfiguration config = new SimConfiguration();
+					config.setQueryName(confs[i]);
+					config.setClientNum(new Integer(confs[i + 1]));
+					config.setQueryNum(new Integer(confs[i + 2]));
+					targetConfs.add(config);
+				}
+			}
+			/*
+			 * read the configuration for background queries
+			 */
+			if ((line = reader.readLine()) != null) {
+				String[] confs = line.split(" ");
+				for (int i = 0; i < confs.length; i += 3) {
+					SimConfiguration config = new SimConfiguration();
+					config.setQueryName(confs[i]);
+					config.setClientNum(new Integer(confs[i + 1]));
+					config.setQueryNum(new Integer(confs[i + 2]));
+					backgroundConfs.add(config);
+				}
+			}
+			/*
+			 * read the scheudling policy
+			 */
+			if ((line = reader.readLine()) != null) {
+				schedulingType = line;
+			}
+			reader.close();
+		} catch (Exception ex) {
+			System.out
+					.println("Failed to read the configuration file, the reason is: "
+							+ ex.getMessage());
+		}
+		/*
+		 * populate the target queries
+		 */
+		for (SimConfiguration conf : targetConfs) {
+			for (int i = 0; i < conf.getClientNum(); i++) {
+				LinkedList<Query> targetQueryList = new LinkedList<Query>();
+				LinkedList<Query> finishedQueryList = new LinkedList<Query>();
+				for (int j = 0; j < conf.getQueryNum(); j++) {
+					Query targetQuery = new Query();
+					targetQuery.setQuery_type(i);
+					targetQuery.setQuery_name(conf.getQueryName());
+					for (Kernel kernel : readKernelFile(conf.getQueryName()
+							+ ".csv", targetQuery.getQuery_type())) {
+						targetQuery.getKernelQueue().offer(kernel);
+					}
+					targetQueryList.offer(targetQuery);
+				}
+				targetQueries.add(targetQueryList);
+				finishedQueries.add(finishedQueryList);
+			}
+		}
+		/*
+		 * populate the background queries, which are always numbered after
+		 * target queries
+		 */
+		for (SimConfiguration conf : backgroundConfs) {
+			for (int i = 0; i < conf.getClientNum(); i++) {
+				LinkedList<Query> backgroundQueryList = new LinkedList<Query>();
+				for (int j = 0; j < conf.getQueryNum(); j++) {
+					Query backgroundQuery = new Query();
+					backgroundQuery.setQuery_type(i + targetQueries.size());
+					backgroundQuery.setQuery_name(conf.getQueryName());
+					for (Kernel kernel : readKernelFile(conf.getQueryName()
+							+ ".csv", backgroundQuery.getQuery_type())) {
+						backgroundQuery.getKernelQueue().offer(kernel);
+					}
+					backgroundQueryList.offer(backgroundQuery);
+				}
+				backgroundQueries.add(backgroundQueryList);
+			}
+		}
 	}
 }

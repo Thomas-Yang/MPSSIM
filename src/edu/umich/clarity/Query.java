@@ -1,7 +1,7 @@
 package edu.umich.clarity;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.LinkedList;
+import java.util.Queue;
 
 public class Query {
 	public static final int TARGET_QUERY = 0;
@@ -9,8 +9,8 @@ public class Query {
 	private int query_type;
 	private float start_time;
 	private float end_time;
-	private BlockingQueue<Kernel> kernelQueue;
-	private BlockingQueue<Kernel> finishedKernelQueue;
+	private Queue<Kernel> kernelQueue;
+	private Queue<Kernel> finishedKernelQueue;
 	private boolean finished;
 	private boolean seqconstraint;
 
@@ -18,8 +18,8 @@ public class Query {
 		this.start_time = 0.0f;
 		this.finished = false;
 		this.seqconstraint = false;
-		this.kernelQueue = new LinkedBlockingQueue<Kernel>();
-		this.finishedKernelQueue = new LinkedBlockingQueue<Kernel>();
+		this.kernelQueue = new LinkedList<Kernel>();
+		this.finishedKernelQueue = new LinkedList<Kernel>();
 	}
 
 	public String getQuery_name() {
@@ -54,19 +54,19 @@ public class Query {
 		this.end_time = end_time;
 	}
 
-	public BlockingQueue<Kernel> getKernelQueue() {
+	public Queue<Kernel> getKernelQueue() {
 		return kernelQueue;
 	}
 
-	public void setKernelQueue(BlockingQueue<Kernel> kernelQueue) {
+	public void setKernelQueue(Queue<Kernel> kernelQueue) {
 		this.kernelQueue = kernelQueue;
 	}
 
-	public BlockingQueue<Kernel> getFinishedKernelQueue() {
+	public Queue<Kernel> getFinishedKernelQueue() {
 		return finishedKernelQueue;
 	}
 
-	public void setFinishedKernelQueue(BlockingQueue<Kernel> finishedKernelQueue) {
+	public void setFinishedKernelQueue(Queue<Kernel> finishedKernelQueue) {
 		this.finishedKernelQueue = finishedKernelQueue;
 	}
 
