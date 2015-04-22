@@ -3,6 +3,11 @@ package edu.umich.clarity;
 import java.util.LinkedList;
 import java.util.Queue;
 
+/**
+ * 
+ * @author hailong
+ *
+ */
 public class Query {
 	public static final int TARGET_QUERY = 0;
 	private String query_name;

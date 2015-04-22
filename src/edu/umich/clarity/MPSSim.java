@@ -12,6 +12,16 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Random;
 
+/**
+ * A simulator to study the MPS scheduling policy. There are two types of
+ * queries exist for the simulation, 1) target query, require QoS satisfaction;
+ * 2) background query, improve system utilization. All the queries are
+ * submitted in a closed loop, however it is easy to extend to support open
+ * loop.
+ * 
+ * @author hailong
+ *
+ */
 public class MPSSim {
 	// the total compute slots
 	public static final int COMPUTE_SLOTS = 15;
@@ -40,8 +50,10 @@ public class MPSSim {
 	public static String schedulingType;
 
 	public static final String FIFO_SCHEDULE = "fifo";
-	public static final String PRIORITY_SCHEDULE = "priority";
-	public static final String FAIRNESS_SCHEDULE = "fairness";
+	public static final String PRIORITY_FIRST_SCHEDULE = "priority";
+	public static final String FAIRNESS_FIRST_SCHEDULE = "fairness";
+	public static final String OCCUPANCY_FIRST_SCHEDULE = "occupancy";
+	public static final String SHORTEST_FIRST_SCHEDULE = "shortest";
 	private int available_slots = MPSSim.COMPUTE_SLOTS;
 
 	/**
@@ -58,6 +70,9 @@ public class MPSSim {
 		utilization = new ArrayList<Map.Entry<Float, Float>>();
 	}
 
+	/**
+	 * initialize the simulator
+	 */
 	private void init() {
 		for (LinkedList<Query> queries : targetQueries) {
 			issuingQueries.add(queries.poll());
@@ -71,6 +86,13 @@ public class MPSSim {
 		enqueueKernel(0.0f);
 	}
 
+	/**
+	 * Choose the query with FIFO order, default MPS scheduling policy
+	 * 
+	 * @param select_range
+	 *            the target queries to select from
+	 * @return the index of the target query
+	 */
 	private int FIFOSchedule(ArrayList<Integer> select_range) {
 		int chosen_query;
 		/*
@@ -87,9 +109,10 @@ public class MPSSim {
 	 * target queries available, use FIFO
 	 * 
 	 * @param select_range
-	 * @return
+	 *            the target queries to select from
+	 * @return the index of the target query
 	 */
-	private int PrioritySchedule(ArrayList<Integer> select_range) {
+	private int PriorityFirstSchedule(ArrayList<Integer> select_range) {
 		int chosen_query = 0;
 		ArrayList<Integer> first_priority = new ArrayList<Integer>();
 		for (int i = 0; i < targetQueries.size(); i++) {
@@ -112,25 +135,55 @@ public class MPSSim {
 	 * Whenever there are multiple target queries to choose, make sure each type
 	 * of query use the compute resource equally
 	 * 
+	 * TODO not sure to support this
+	 * 
 	 * @param select_range
-	 * @return
+	 *            the target queries to select from
+	 * @return the index of the target query
 	 */
-	private int FairnessSchedule(ArrayList<Integer> select_range) {
+	private int FairnessFirstSchedule(ArrayList<Integer> select_range) {
 		int chosen_query = 0;
-		ArrayList<Integer> first_priority = new ArrayList<Integer>();
-		for (int i = 0; i < targetQueries.size(); i++) {
-			if (select_range.contains(i)) {
-				first_priority.add(i);
+		return chosen_query;
+	}
+
+	/**
+	 * Always choose the kernel with largest occupancy to schedule
+	 * 
+	 * @param select_range
+	 *            the target queries to select from
+	 * @return the index of the target query
+	 */
+	private int OccupancyFirstSchedule(ArrayList<Integer> select_range) {
+		int chosen_query = 0;
+		int max_occupancy = 0;
+		for (Integer index : select_range) {
+			int current_occupancy = issuingQueries.get(index).getKernelQueue()
+					.peek().getOccupancy();
+			if (current_occupancy >= max_occupancy) {
+				max_occupancy = current_occupancy;
+				chosen_query = index;
 			}
 		}
-		/*
-		 * no priority query exists, use MPS default FIFO
-		 */
-		if (first_priority.size() == 0) {
-			chosen_query = FIFOSchedule(select_range);
-		} else {// multiple priority queries exist, pick one with the least
-				// fairness
-			
+		return chosen_query;
+	}
+
+	/**
+	 * Always choose the kernel with least execution time to schedule
+	 * 
+	 * @param select_range
+	 *            the target queries to select from
+	 * @return the index of the target query
+	 */
+	private int ShortestFirstSchedule(ArrayList<Integer> select_range) {
+		int chosen_query = 0;
+		float min_duration = Float.POSITIVE_INFINITY;
+		for (Integer index : select_range) {
+			float current_duration = issuingQueries.get(index).getKernelQueue()
+					.peek().getDuration();
+			if (current_duration <= min_duration) {
+				min_duration = current_duration;
+				chosen_query = index;
+			}
 		}
 		return chosen_query;
 	}
@@ -185,8 +238,17 @@ public class MPSSim {
 						.equalsIgnoreCase(MPSSim.FIFO_SCHEDULE)) {
 					chosen_query = FIFOSchedule(select_range);
 				} else if (MPSSim.schedulingType
-						.equalsIgnoreCase(MPSSim.PRIORITY_SCHEDULE)) {
-					chosen_query = PrioritySchedule(select_range);
+						.equalsIgnoreCase(MPSSim.PRIORITY_FIRST_SCHEDULE)) {
+					chosen_query = PriorityFirstSchedule(select_range);
+				} else if (MPSSim.schedulingType
+						.equalsIgnoreCase(MPSSim.OCCUPANCY_FIRST_SCHEDULE)) {
+					chosen_query = OccupancyFirstSchedule(select_range);
+				} else if (MPSSim.schedulingType
+						.equalsIgnoreCase(MPSSim.FAIRNESS_FIRST_SCHEDULE)) {
+					chosen_query = FairnessFirstSchedule(select_range);
+				} else if (MPSSim.schedulingType
+						.equalsIgnoreCase(SHORTEST_FIRST_SCHEDULE)) {
+					chosen_query = ShortestFirstSchedule(select_range);
 				}
 				/*
 				 * 4.1 priority first, always choose the kernel from the target
@@ -465,7 +527,8 @@ public class MPSSim {
 	}
 
 	/**
-	 * TODO calculate the utilization with mutiple target queries
+	 * TODO another way to calculate the utilization; TODO calculate the
+	 * utilization with mutiple target queries
 	 * 
 	 * @param mps_sim
 	 */

@@ -1,5 +1,10 @@
 package edu.umich.clarity;
 
+/**
+ * 
+ * @author hailong
+ *
+ */
 public class Kernel {
 	private String kernel_name;
 	private int query_type;
