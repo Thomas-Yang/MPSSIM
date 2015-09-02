@@ -29,9 +29,9 @@ public class MPSSim {
 	// TODO not used for now
 	public static final float KERNEL_SLACK = 0.0f;
 	// the location of kernel profiles
-	public static final String PROFILE_PATH = "/home/quan/git/MPSSIM/input/formated/";
+	public static final String PROFILE_PATH = "input/formated/";
 	// the location of simulation configuration
-	public static final String CONFIG_PATH = "/home/quan/git/MPSSIM/input/";
+	public static final String CONFIG_PATH = "input/";
 
 	public static ArrayList<LinkedList<Query>> targetQueries;
 	public static ArrayList<LinkedList<Query>> backgroundQueries;
