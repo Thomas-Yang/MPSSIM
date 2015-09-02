@@ -29,9 +29,9 @@ public class MPSSim {
 	// TODO not used for now
 	public static final float KERNEL_SLACK = 0.0f;
 	// the location of kernel profiles
-	public static final String PROFILE_PATH = "/home/hailong/git/MPSSIM/bin/edu/umich/clarity/formated/";
+	public static final String PROFILE_PATH = "/home/quan/git/MPSSIM/input/formated/";
 	// the location of simulation configuration
-	public static final String CONFIG_PATH = "/home/hailong/git/MPSSIM/bin/edu/umich/clarity/";
+	public static final String CONFIG_PATH = "/home/quan/git/MPSSIM/input/";
 
 	public static ArrayList<LinkedList<Query>> targetQueries;
 	public static ArrayList<LinkedList<Query>> backgroundQueries;
@@ -572,26 +572,31 @@ public class MPSSim {
 			 * format is (query name, client number, query number)
 			 */
 			if ((line = reader.readLine()) != null) {
-				String[] confs = line.split(" ");
+				String[] confs = line.split(",");
+				System.out.println("confs length: "+confs.length+" confs: "+confs[0]);
+				
 				for (int i = 0; i < confs.length; i += 3) {
 					SimConfiguration config = new SimConfiguration();
 					config.setQueryName(confs[i]);
 					config.setClientNum(new Integer(confs[i + 1]));
 					config.setQueryNum(new Integer(confs[i + 2]));
 					targetConfs.add(config);
+					System.out.println("Target QueryName: "+config.getQueryName()+", Client NUm: "+config.getClientNum() + ", Query num: "+config.getQueryNum());
 				}
 			}
 			/*
 			 * read the configuration for background queries
 			 */
 			if ((line = reader.readLine()) != null) {
-				String[] confs = line.split(" ");
+				String[] confs = line.split(",");
 				for (int i = 0; i < confs.length; i += 3) {
 					SimConfiguration config = new SimConfiguration();
 					config.setQueryName(confs[i]);
 					config.setClientNum(new Integer(confs[i + 1]));
 					config.setQueryNum(new Integer(confs[i + 2]));
 					backgroundConfs.add(config);
+					System.out.println("Background QueryName: "+config.getQueryName()+", Client NUm: "+config.getClientNum() + ", Query num: "+config.getQueryNum());
+
 				}
 			}
 			/*
@@ -606,6 +611,7 @@ public class MPSSim {
 					.println("Failed to read the configuration file, the reason is: "
 							+ ex.getMessage());
 		}
+
 		/*
 		 * populate the target queries
 		 */
