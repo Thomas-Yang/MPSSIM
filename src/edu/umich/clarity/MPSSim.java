@@ -6,6 +6,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -22,6 +23,7 @@ import java.util.Random;
  * @author hailong
  *
  */
+
 public class MPSSim {
 	// the total compute slots
 	public static final int COMPUTE_SLOTS = 15;
@@ -43,6 +45,8 @@ public class MPSSim {
 	private ArrayList<Integer> issueIndicator;
 	private Queue<Kernel> kernelQueue;
 
+	private final static boolean Detail = false;
+	
 	private boolean pcie_transfer = false;
 	/*
 	 * kernel scheduling policy
@@ -289,13 +293,15 @@ public class MPSSim {
 						kernel.setEnd_time(kernel.getDuration() + elapse_time
 								+ MPSSim.KERNEL_SLACK);
 						kernelQueue.offer(kernel);
-						System.out.println("MPS enqueues kernel "
+						if (Detail) {	
+							System.out.println("MPS enqueues kernel "
 								+ kernel.getExecution_order() + " from query "
 								+ kernel.getQuery_type()
 								+ " with kernel occupacy "
 								+ kernel.getOccupancy()
 								+ " and estimated finish time "
 								+ kernel.getEnd_time());
+						}
 						/*
 						 * 8. assign the compute slot for the kernel
 						 */
@@ -414,11 +420,13 @@ public class MPSSim {
 			/*
 			 * 11. select the kernel to be issued to the queue
 			 */
-			System.out.println("At time " + kernel.getEnd_time() + "(ms)"
+			if (Detail) {
+				System.out.println("At time " + kernel.getEnd_time() + "(ms)"
 					+ " finished executing kernel "
 					+ kernel.getExecution_order() + " from query "
 					+ kernel.getQuery_type());
-			System.out.println("Enqueue new kernels from the issuing list...");
+				System.out.println("Enqueue new kernels from the issuing list...");
+			}
 			enqueueKernel(kernel.getEnd_time());
 		}
 		System.out
@@ -462,6 +470,13 @@ public class MPSSim {
 		} catch (Exception ex) {
 			System.out.println("Failed to read the file" + ex.getMessage());
 		}
+/*		
+		float whole_duration = 0;
+		for (Kernel k : kernelList) {
+			whole_duration +=k.getDuration();
+		}
+		System.out.println("query is "+filename+", whole duration is: "+whole_duration); 
+ */
 		return kernelList;
 	}
 
@@ -493,6 +508,8 @@ public class MPSSim {
 		 * print out the statistics from the finished query queue, save the
 		 * target query latency distribution into a file
 		 */
+		ArrayList<Float> all_latency = new ArrayList<Float>();
+		
 		float accumulative_latency = 0.0f;
 		float target_endtime = 0.0f;
 		for (int i = 0; i < finishedQueries.size(); i++) {
@@ -505,6 +522,8 @@ public class MPSSim {
 				for (Query finishedQuery : finishedQueries.get(i)) {
 					accumulative_latency += finishedQuery.getEnd_time()
 							- finishedQuery.getStart_time();
+					all_latency.add(finishedQuery.getEnd_time()-finishedQuery.getStart_time());
+					
 					bw.write(finishedQuery.getEnd_time()
 							- finishedQuery.getStart_time() + "\n");
 					if (finishedQuery.getEnd_time() > target_endtime) {
@@ -517,6 +536,10 @@ public class MPSSim {
 						.println("Failed to write to the latency.txt, the reason is: "
 								+ ex.getMessage());
 			}
+			
+			Collections.sort(all_latency);
+			System.out.println("50%-ile latency is: "+all_latency.get(all_latency.size()/2).floatValue());
+			System.out.println("99%-ile latency is: "+all_latency.get(all_latency.size()*99/100).floatValue());
 			/*
 			 * print out the average latency for target queries
 			 */
