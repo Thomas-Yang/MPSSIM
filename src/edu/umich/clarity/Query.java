@@ -18,9 +18,11 @@ public class Query {
 	private Queue<Kernel> finishedKernelQueue;
 	private boolean finished;
 	private boolean seqconstraint;
-
+	private float ready_time;	//the ready time of the first unexecuted kernel
+	
 	public Query() {
 		this.start_time = 0.0f;
+		this.ready_time = 0.0f;
 		this.finished = false;
 		this.seqconstraint = false;
 		this.kernelQueue = new LinkedList<Kernel>();
@@ -93,6 +95,14 @@ public class Query {
 
 	public static int getTargetQuery() {
 		return TARGET_QUERY;
+	}
+
+	public float getReady_time() {
+		return ready_time;
+	}
+
+	public void setReady_time(float ready_time) {
+		this.ready_time = ready_time;
 	}
 
 }

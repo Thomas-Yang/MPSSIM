@@ -14,7 +14,9 @@ public class Kernel {
 	private int occupancy;
 	private boolean finished;
 	private int execution_order;
-
+	private int warps_per_batch;
+	private int warps;
+	
 	public Kernel() {
 		this.start_time = 0.0f;
 		this.finished = false;
@@ -82,5 +84,21 @@ public class Kernel {
 
 	public void setExecution_order(int execution_order) {
 		this.execution_order = execution_order;
+	}
+
+	public int getWarps_per_batch() {
+		return warps_per_batch;
+	}
+
+	public void setWarps_per_batch(int warps_per_batch) {
+		this.warps_per_batch = warps_per_batch;
+	}
+
+	public int getWarps() {
+		return warps;
+	}
+
+	public void setWarps(int warps) {
+		this.warps = warps;
 	}
 }
