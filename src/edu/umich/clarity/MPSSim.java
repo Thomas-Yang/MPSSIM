@@ -47,7 +47,7 @@ public class MPSSim {
 
 	public static int n_bg;
 	public static int n_tg;
-	
+	public static String bg_name;
 	private final static boolean Detail = false;
 	
 	private boolean pcie_transfer = false;
@@ -785,13 +785,15 @@ public class MPSSim {
 		
 		float accumulative_latency = 0.0f;
 		float target_endtime = 0.0f;
+
 		for (int i = 0; i < finishedQueries.size(); i++) {
 			try {
 				BufferedWriter bw = new BufferedWriter(new FileWriter(
 						MPSSim.CONFIG_PATH
-								+ finishedQueries.get(i).peek().getQuery_name()
-								+ "-" + i + "-" + schedulingType + "-"
-								+ "latency.txt"));
+								+ "sim-"+finishedQueries.get(i).peek().getQuery_name()
+								+ "+" + n_bg + "+" + bg_name + "+" + schedulingType + ".csv"));
+//								+ "+" + n_bg + "+" + bg_name + "-" + schedulingType + "-"
+//								+ "latency.csv"));
 				bw.write("end_to_end\n");
 				for (Query finishedQuery : finishedQueries.get(i)) {
 					accumulative_latency += finishedQuery.getEnd_time()
@@ -811,6 +813,8 @@ public class MPSSim {
 								+ ex.getMessage());
 			}
 			
+			System.out.println("n_bg is: "+n_bg);
+
 			Collections.sort(all_latency);
 			System.out.println("50%-ile latency is: "+all_latency.get(all_latency.size()/2).floatValue()+","+all_latency.get(all_latency.size()*99/100).floatValue());
 //			System.out.println("99%-ile latency is: "+all_latency.get(all_latency.size()*99/100).floatValue());
@@ -892,6 +896,7 @@ public class MPSSim {
 					config.setClientNum(new Integer(confs[i + 1]));
 					config.setQueryNum(new Integer(confs[i + 2]));
 					n_bg = config.getClientNum();
+					bg_name=config.getQueryName();
 					backgroundConfs.add(config);
 					System.out.println("Background QueryName: "+config.getQueryName()+", Client NUm: "+config.getClientNum() + ", Query num: "+config.getQueryNum());
 
