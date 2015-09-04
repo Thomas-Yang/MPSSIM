@@ -16,6 +16,8 @@ public class Kernel {
 	private int execution_order;
 	private int warps_per_batch;
 	private int warps;
+	private float slack_time;	//the delta time between previous kernel completes and the current kernel is issued
+	private float sole_start_time;	//the start time of the kernel when the query runs alone
 	
 	public Kernel() {
 		this.start_time = 0.0f;
@@ -100,5 +102,21 @@ public class Kernel {
 
 	public void setWarps(int warps) {
 		this.warps = warps;
+	}
+
+	public float getSlack_time() {
+		return slack_time;
+	}
+
+	public void setSlack_time(float slack_time) {
+		this.slack_time = slack_time;
+	}
+
+	public float getSole_start_time() {
+		return sole_start_time;
+	}
+
+	public void setSole_start_time(float sole_start_time) {
+		this.sole_start_time = sole_start_time;
 	}
 }

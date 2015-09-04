@@ -621,7 +621,7 @@ public class MPSSim {
 			available_slots += kernel.getOccupancy();
 			
 			//set the ready time of the next kernel in issuing Queries.
-			issuingQueries.get(kernel.getQuery_type()).setReady_time(kernel.getEnd_time());
+			issuingQueries.get(kernel.getQuery_type()).setReady_time(kernel.getEnd_time()+kernel.getSlack_time());
 			
 			/*
 			 * 5. add the finished kernel back to the query's finished kernel
@@ -676,7 +676,7 @@ public class MPSSim {
 						comingQuery.setStart_time(kernel.getEnd_time());
 						issuingQueries.set(kernel.getQuery_type(), comingQuery);
 						issueIndicator.set(kernel.getQuery_type(), 1);
-						issuingQueries.get(kernel.getQuery_type()).setReady_time(kernel.getEnd_time()+1.0f);
+						issuingQueries.get(kernel.getQuery_type()).setReady_time(kernel.getEnd_time()+1.2f);
 					}
 				}
 //				if (kernel.getQuery_type() >= targetQueries.size())
@@ -729,18 +729,28 @@ public class MPSSim {
 			while ((line = fileReader.readLine()) != null) {
 				String[] profile = line.split(",");
 				Kernel kernel = new Kernel();
-				kernel.setDuration(new Float(profile[1]).floatValue());
-				kernel.setOccupancy(new Integer(profile[4]).intValue());
-				kernel.setWarps_per_batch((int)(new Float(profile[3]).floatValue()*64*15));
-				kernel.setWarps(new Integer(profile[2]).intValue());
+				kernel.setDuration(new Float(profile[2]).floatValue());
+				kernel.setOccupancy(new Integer(profile[5]).intValue());
+				kernel.setWarps_per_batch((int)(new Float(profile[4]).floatValue()*64*15));
+				kernel.setWarps(new Integer(profile[3]).intValue());
 				kernel.setQuery_type(queryType);
 				kernel.setExecution_order(i);
+				kernel.setSole_start_time(new Float(profile[1]).floatValue());
+
 				kernelList.add(kernel);
+//				System.out.println("Slack time is: "+kernel.getSlack_time());
 				i++;
 			}
+			
+			for(i=0; i<kernelList.size()-1;i++) {
+				kernelList.get(i).setSlack_time(kernelList.get(i+1).getSole_start_time() - (kernelList.get(i).getDuration()+kernelList.get(i).getSole_start_time()));
+				if(kernelList.get(i).getSlack_time()<0)	kernelList.get(i).setSlack_time(0);
+//					System.out.println("file name: "+filename+", the slack id is: "+kernelList.get(i).getExecution_order());
+			}
+			
 			fileReader.close();
 		} catch (Exception ex) {
-			System.out.println("Failed to read the file" + ex.getMessage());
+			System.out.println("Failed to read the file!" + ex.getMessage());
 		}
 /*		
 		float whole_duration = 0;
@@ -799,7 +809,7 @@ public class MPSSim {
 					accumulative_latency += finishedQuery.getEnd_time()
 							- finishedQuery.getStart_time();
 					all_latency.add(finishedQuery.getEnd_time()-finishedQuery.getStart_time());
-					System.out.println("start: "+finishedQuery.getStart_time()+", end: "+finishedQuery.getEnd_time());
+//					System.out.println("start: "+finishedQuery.getStart_time()+", end: "+finishedQuery.getEnd_time());
 					bw.write(finishedQuery.getEnd_time()
 							- finishedQuery.getStart_time() + "\n");
 					if (finishedQuery.getEnd_time() > target_endtime) {
