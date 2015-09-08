@@ -2,16 +2,21 @@ package edu.umich.clarity;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Random;
+
+import com.opencsv.CSVReader;
 
 /**
  * A simulator to study the MPS scheduling policy. There are two types of
@@ -35,12 +40,18 @@ public class MPSSim {
 	// the location of simulation configuration
 	public static final String CONFIG_PATH = "input/";
 
+	public static final String TARGET_LOAD="input/load/target_load.csv";
+	public static final String BG_LOAD="input/load/bg_load.csv";
+	
 	public static ArrayList<LinkedList<Query>> targetQueries;
 	public static ArrayList<LinkedList<Query>> backgroundQueries;
 
 	private static ArrayList<LinkedList<Query>> finishedQueries;
 	private static ArrayList<Map.Entry<Float, Float>> utilization;
 
+	private static List target_load = null;
+	private static List bg_load=null;
+	
 	private ArrayList<Query> issuingQueries;
 	private ArrayList<Integer> issueIndicator;
 	private Queue<Kernel> kernelQueue;
@@ -564,9 +575,9 @@ public class MPSSim {
 						 * 8. assign the compute slot for the kernel
 						 */
 						available_slots -= kernel.getOccupancy();
-						if (kernel.getOccupancy() == 0) {
-							pcie_transfer = true;
-						}
+//						if (kernel.getOccupancy() == 0) {
+//							pcie_transfer = true;
+//						}
 					}
 				}
 				/*
@@ -676,7 +687,7 @@ public class MPSSim {
 						comingQuery.setStart_time(kernel.getEnd_time());
 						issuingQueries.set(kernel.getQuery_type(), comingQuery);
 						issueIndicator.set(kernel.getQuery_type(), 1);
-						issuingQueries.get(kernel.getQuery_type()).setReady_time(kernel.getEnd_time()+1.2f);
+						issuingQueries.get(kernel.getQuery_type()).setReady_time(kernel.getEnd_time()+1.0f);
 					}
 				}
 //				if (kernel.getQuery_type() >= targetQueries.size())
@@ -686,7 +697,7 @@ public class MPSSim {
 			 * 11. select the kernel to be issued to the queue
 			 */
 			if (Detail) {
-				System.out.println("At time " + kernel.getEnd_time() + "(ms)"
+				System.out.println("At time " + kernel.getEnd_time() + " (ms)"
 					+ " finished executing kernel "
 					+ kernel.getExecution_order() + " from query "
 					+ kernel.getQuery_type());
@@ -768,6 +779,8 @@ public class MPSSim {
 		 * manipulate the input
 		 */
 		preprocess("sim.conf");
+		
+		read_load();
 		/*
 		 * start to simulate
 		 */
@@ -781,6 +794,34 @@ public class MPSSim {
 		calculate_utilization(mps_sim);
 	}
 
+	private static void read_load(){
+		try {
+			CSVReader reader = new CSVReader(new FileReader(TARGET_LOAD), ',');
+			try {
+				target_load = reader.readAll();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		try {
+			CSVReader reader = new CSVReader(new FileReader(BG_LOAD), ',');
+			try {
+				bg_load = reader.readAll();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
 	/**
 	 * TODO calculate the latency distribution for mutiple target queries
 	 * 
@@ -801,7 +842,8 @@ public class MPSSim {
 				BufferedWriter bw = new BufferedWriter(new FileWriter(
 						MPSSim.CONFIG_PATH
 								+ "sim-"+finishedQueries.get(i).peek().getQuery_name()
-								+ "+" + n_bg + "+" + bg_name + "+" + schedulingType + ".csv"));
+								+ "-" + n_bg + "-" + bg_name + ".csv"));
+//								+ "+" + n_bg + "+" + bg_name + "+" + schedulingType + ".csv"));				
 //								+ "+" + n_bg + "+" + bg_name + "-" + schedulingType + "-"
 //								+ "latency.csv"));
 				bw.write("end_to_end\n");
@@ -826,7 +868,7 @@ public class MPSSim {
 			System.out.println("n_bg is: "+n_bg);
 
 			Collections.sort(all_latency);
-			System.out.println("50%-ile latency is: "+all_latency.get(all_latency.size()/2).floatValue()+","+all_latency.get(all_latency.size()*99/100).floatValue());
+			System.out.println("50%-ile latency is: "+all_latency.get(all_latency.size()/2).floatValue()+", 99%-ile latency is: "+all_latency.get(all_latency.size()*99/100).floatValue());
 //			System.out.println("99%-ile latency is: "+all_latency.get(all_latency.size()*99/100).floatValue());
 			/*
 			 * print out the average latency for target queries
@@ -839,7 +881,7 @@ public class MPSSim {
 
 	/**
 	 * TODO another way to calculate the utilization; TODO calculate the
-	 * utilization with mutiple target queries
+	 * utilization with multiple target queries
 	 * 
 	 * @param mps_sim
 	 */
@@ -913,7 +955,7 @@ public class MPSSim {
 				}
 			}
 			/*
-			 * read the scheudling policy
+			 * read the scheduling policy
 			 */
 			if ((line = reader.readLine()) != null) {
 				schedulingType = line;
